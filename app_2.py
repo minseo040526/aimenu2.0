@@ -231,7 +231,7 @@ with tab_recommendation:
 
     with col1:
         st.markdown("#### 👤 인원수")
-        n_people = st.number_input("함께하는 인원수", min_value=1, max_value=10, value=2, step=1)
+        n_people = st.number_input("인원수 만큼 음료를 추천해드려요.", min_value=1, max_value=10, value=2, step=1)
 
     with col2:
         st.markdown("#### 💰 예산 (1인 기준)")
@@ -245,7 +245,7 @@ with tab_recommendation:
 
     with col3:
         st.markdown("#### 🥖 베이커리 개수")
-        n_bakery = st.slider("추천받을 베이커리 개수 (1인)", min_value=1, max_value=5, value=2, step=1)
+        n_bakery = st.slider("추천받을 베이커리 개수", min_value=1, max_value=5, value=2, step=1)
 
     with col4:
         st.markdown("#### ☕ 음료 카테고리")
@@ -258,10 +258,10 @@ with tab_recommendation:
         )
         
     with col5:
-        st.markdown("#### 🏷️ 선호 태그 (최대 3개씩)")
+        st.markdown("#### 🏷️ 선호 태그 (최대 3개씩 선택가능합니다)")
         # --- 2. 당도/맛 태그 선택 (음료/베이커리 공통) ---
         selected_sweetness_tags = st.multiselect(
-            "선호 당도/맛 태그 (음료 필터링 기준)",
+            "내 취향 음료 찾기: 선호 당도/맛 태그(미선택시 랜덤으로 추천해드려요)",
             options=ui_sweetness_tags,
             default=[],
             max_selections=3,
@@ -269,7 +269,7 @@ with tab_recommendation:
         )
         # --- 3. 베이커리 전용 태그 선택 (베이커리 필터링 기준) ---
         selected_utility_tags = st.multiselect(
-            "선호 베이커리 태그 (베이커리 필터링 기준)",
+            "내 취향 베이커리 찾기: 선호 베이커리 태그 (미선택시 랜덤으로 추천해드려요)",
             options=ui_utility_tags,
             default=[],
             max_selections=3,
