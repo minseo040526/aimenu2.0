@@ -276,3 +276,4 @@ with tab_menu_board:
         st.warning("`menu_board_1.png` 파일을 찾을 수 없어 이미지 대신 데이터 테이블을 표시합니다.")
         st.dataframe(bakery_df.drop(columns=['tags_list', 'popularity_score']).rename(columns={'name': '메뉴', 'price': '가격', 'tags': '태그'}), use_container_width=True)
 
+   
