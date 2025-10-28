@@ -73,18 +73,19 @@ all_bakery_tags = sorted(list(set(tag for sublist in bakery_df['tags_list'] for 
 all_drink_tags = sorted(list(set(tag for sublist in drink_df['tags_list'] for tag in sublist if tag != '인기'))) 
 all_drink_categories = sorted(drink_df['category'].unique())
 
-# --- 태그 그룹 분리 (사용자 요청에 따라) ---
-# 당도/맛 태그와 베이커리 용도 태그를 수동으로 분리 정의
-# 이는 CSV 파일의 내용에 따라 달라질 수 있으므로, 사용자가 추가/수정할 경우 코드를 업데이트해야 합니다.
-SWEETNESS_TAGS = ['달콤한', '고소한', '짭짤한', '단백한', '부드러운', '깔끔한', '쌉싸름한', '상큼한', '씁쓸한']
-UTILITY_TAGS = ['든든한', '간단한', '화려한']
+# --- 태그 목록 동적으로 추출 ---
+def uniq_tags(df):
+    return set(t for sub in df['tags_list'] for t in sub if t and t != '인기')
 
-# UI에 표시할 태그 목록 필터링
-ui_sweetness_tags = sorted([tag for tag in all_bakery_tags if tag in SWEETNESS_TAGS] + [tag for tag in all_drink_tags if tag in SWEETNESS_TAGS])
-ui_utility_tags = sorted([tag for tag in all_bakery_tags if tag in UTILITY_TAGS])
-ui_sweetness_tags = sorted(list(set(ui_sweetness_tags)))
-ui_utility_tags = sorted(list(set(ui_utility_tags)))
+ALL_TAGS = sorted(uniq_tags(bakery_df) | uniq_tags(drink_df))
+BAKERY_TAGS = sorted(uniq_tags(bakery_df))
+DRINK_TAGS = sorted(uniq_tags(drink_df))
 
+SWEETNESS_TAGS = {'달콤한','고소한','짭짤한','단백한','부드러운','깔끔한','쌉싸름한','상큼한','씁쓸한'}
+UTILITY_TAGS = {'든든한','간단한','화려한'}
+
+ui_sweetness_tags = sorted(t for t in (DRINK_TAGS | BAKERY_TAGS) if t in SWEETNESS_TAGS) or DRINK_TAGS or ALL_TAGS
+ui_utility_tags = sorted(t for t in BAKERY_TAGS if t in UTILITY_TAGS) or BAKERY_TAGS
 
 # --- 추천 로직 함수 ---
 def recommend_menu(df, selected_sweetness_tags, selected_utility_tags, n_items, max_price=None, selected_categories=None):
