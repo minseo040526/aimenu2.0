@@ -1,7 +1,4 @@
 
-### Python Streamlit 코드
-
-```python
 import streamlit as st
 import pandas as pd
 import random
