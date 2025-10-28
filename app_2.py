@@ -86,11 +86,6 @@ SWEETNESS = {'달콤한','고소한','짭짤한','단백한','부드러운','깔
 
 ui_sweetness_tags = sorted((BAKERY_TAGS | DRINK_TAGS) & SWEETNESS)
 ui_utility_tags = sorted(BAKERY_TAGS - SWEETNESS)  # 베이커리에서 당도 태그 제외한 나머지
-# UI에 표시할 태그 목록 필터링
-ui_sweetness_tags = sorted([tag for tag in all_bakery_tags if tag in SWEETNESS_TAGS] + [tag for tag in all_drink_tags if tag in SWEETNESS_TAGS])
-ui_utility_tags = sorted([tag for tag in all_bakery_tags if tag in UTILITY_TAGS])
-ui_sweetness_tags = sorted(list(set(ui_sweetness_tags)))
-ui_utility_tags = sorted(list(set(ui_utility_tags)))
 
 
 # --- 추천 로직 함수 ---
