@@ -4,131 +4,211 @@ import random
 import itertools
 from PIL import Image
 
-# --- 데이터 로드 및 전처리 ---
-def load_and_preprocess_data():
-    """CSV 파일을 로드하고 태그 및 당도 컬럼을 전처리합니다."""
-    try:
-        # CSV 파일 로드
-        bakery_df = pd.read_csv("Bakery_menu.csv")
-        drink_df = pd.read_csv("Drink_menu.csv")
-    except FileNotFoundError:
-        st.error("메뉴 CSV 파일을 찾을 수 없습니다. 'Bakery_menu.csv'와 'Drink_menu.csv' 파일을 확인해주세요.")
-        st.stop()
-    except Exception as e:
-        st.error(f"메뉴 CSV 파일을 로드하는 중 오류가 발생했습니다: {e}")
-        st.stop()
+# --- 데이터 로드 및 컬럼 정규화 함수 ---
+
+def normalize_columns(df, is_drink=False):
+    """'sweetness' 컬럼을 'tags'로 리네임하고 필수 컬럼을 확인합니다."""
     
-    # 1. 태그 전처리 함수 (기존 로직 유지)
-    def preprocess_tags(df):
-        """CSV의 tags 컬럼을 클린징하고 리스트로 변환합니다."""
-        df['tags_list'] = df['tags'].fillna('').astype(str).str.strip().str.replace('#', '').str.split(r'\s*,\s*')
-        df['tags_list'] = df['tags_list'].apply(lambda x: [tag.strip() for tag in x if tag.strip()])
-        return df
-
-    bakery_df = preprocess_tags(bakery_df)
-    drink_df = preprocess_tags(drink_df)
-
-    # 2. 당도(sweetness) 컬럼 처리
-    # sweetness 컬럼이 숫자가 아닐 경우를 대비해 처리
-    for df in [bakery_df, drink_df]:
-        if 'sweetness' in df.columns:
-            df['sweetness'] = pd.to_numeric(df['sweetness'], errors='coerce').fillna(0).astype(int)
-        else:
-            # sweetness 컬럼이 없는 경우 기본값 0 설정
-            df['sweetness'] = 0
-
-    # 전체 사용 가능한 태그 추출
-    all_bakery_tags = sorted(list(set(tag for sublist in bakery_df['tags_list'] for tag in sublist)))
-    all_drink_tags = sorted(list(set(tag for sublist in drink_df['tags_list'] for tag in sublist)))
-    all_tags = sorted(list(set(all_bakery_tags + all_drink_tags)))
+    # 1. 태그 컬럼 정규화: 'sweetness'가 있으면 'tags'로 리네임
+    if 'sweetness' in df.columns and 'tags' not in df.columns:
+        df = df.rename(columns={'sweetness': 'tags'})
     
-    return bakery_df, drink_df, all_tags
+    # 2. 필수 컬럼 확인
+    required_cols = ['name', 'price', 'tags']
+    if is_drink:
+        required_cols.append('category')
 
-bakery_df, drink_df, all_tags = load_and_preprocess_data()
+    # 현재 df에 없는 필수 컬럼 목록
+    missing_cols = [col for col in required_cols if col not in df.columns]
+
+    if missing_cols:
+        col_names = ", ".join(missing_cols)
+        menu_type = "음료" if is_drink else "베이커리"
+        st.error(f"🚨 오류: {menu_type} 파일에 필수 컬럼({col_names})이 없습니다. 베이커리/음료 모두 'name', 'price', 'sweetness' 또는 'tags' 컬럼이 필요합니다. 음료는 추가로 'category' 컬럼이 필요합니다.")
+        st.stop()
+        
+    return df
+
+try:
+    # CSV 파일 로드 및 컬럼 정규화 적용
+    # NOTE: 'sweetness' 컬럼이 'tags'로 내부적으로 리네임되어 사용됨.
+    bakery_df = normalize_columns(pd.read_csv("Bakery_menu.csv"))
+    drink_df = normalize_columns(pd.read_csv("Drink_menu.csv"), is_drink=True)
+
+    if drink_df.empty or bakery_df.empty:
+        st.error("🚨 오류: 메뉴 데이터가 비어 있습니다. 파일 내용을 확인해주세요.")
+        st.stop()
+
+except FileNotFoundError:
+    st.error("🚨 오류: 메뉴 CSV 파일을 찾을 수 없습니다. 파일 이름과 경로를 확인해주세요.")
+    st.stop()
+except Exception as e:
+    st.error(f"🚨 오류: 메뉴 CSV 파일을 로드하는 중 알 수 없는 오류가 발생했습니다: {e}")
+    st.stop()
+
+# --- 데이터 전처리 및 태그 추출 ---
+def preprocess_tags(df):
+    """CSV의 tags 컬럼을 클린징하고 리스트로 변환합니다."""
+    df['tags_list'] = df['tags'].fillna('').astype(str).str.strip().str.replace('#', '').str.split(r'\s*,\s*')
+    df['tags_list'] = df['tags_list'].apply(lambda x: [tag.strip() for tag in x if tag.strip()])
+    return df
+
+bakery_df = preprocess_tags(bakery_df)
+drink_df = preprocess_tags(drink_df)
+
+# --- 인기도 점수 동적 생성 로직 ---
+def assign_popularity_score(df):
+    if 'popularity_score' not in df.columns:
+        df['popularity_score'] = df['tags_list'].apply(
+            lambda tags: 10 if '인기' in tags else 5
+        )
+    return df
+
+bakery_df = assign_popularity_score(bakery_df)
+drink_df = assign_popularity_score(drink_df)
+# --------------------------------------------------------
+
+# 전체 사용 가능한 태그 및 카테고리 추출
+all_bakery_tags = sorted(list(set(tag for sublist in bakery_df['tags_list'] for tag in sublist if tag != '인기'))) 
+all_drink_tags = sorted(list(set(tag for sublist in drink_df['tags_list'] for tag in sublist if tag != '인기'))) 
+all_drink_categories = sorted(drink_df['category'].unique())
+
+# --- 태그 그룹 분리 (사용자 요청에 따라) ---
+# 당도/맛 태그와 베이커리 용도 태그를 수동으로 분리 정의
+# 이는 CSV 파일의 내용에 따라 달라질 수 있으므로, 사용자가 추가/수정할 경우 코드를 업데이트해야 합니다.
+SWEETNESS_TAGS = ['달콤한', '고소한', '짭짤한', '단백한', '부드러운', '깔끔한', '쌉싸름한', '상큼한', '씁쓸한']
+UTILITY_TAGS = ['든든한', '간단한', '화려한']
+
+# UI에 표시할 태그 목록 필터링
+ui_sweetness_tags = sorted([tag for tag in all_bakery_tags if tag in SWEETNESS_TAGS] + [tag for tag in all_drink_tags if tag in SWEETNESS_TAGS])
+ui_utility_tags = sorted([tag for tag in all_bakery_tags if tag in UTILITY_TAGS])
+ui_sweetness_tags = sorted(list(set(ui_sweetness_tags)))
+ui_utility_tags = sorted(list(set(ui_utility_tags)))
 
 
 # --- 추천 로직 함수 ---
-
-def recommend_menu(df, selected_tags, n_items, max_price=None, max_sweetness=None, is_drink=False):
+def recommend_menu(df, selected_sweetness_tags, selected_utility_tags, n_items, max_price=None, selected_categories=None):
     """
-    주어진 예산, 태그, 당도를 기반으로 메뉴 조합을 추천합니다.
-    (is_drink=True인 경우 n_items는 음료 수량(인원수)이 됨)
+    주어진 조건으로 메뉴 조합을 추천합니다.
+    - 음료: 카테고리 AND 당도 태그 필터링
+    - 베이커리: 당도 태그 OR 유틸리티 태그 필터링
     """
 
-    # 1. 태그 필터링
-    if selected_tags:
-        filtered_df = df[df['tags_list'].apply(lambda tags: any(tag in selected_tags for tag in tags))]
+    filtered_df = df.copy()
+    is_drink_menu = 'category' in filtered_df.columns
+    
+    # 1. 카테고리 필터링 (음료에만 해당)
+    if is_drink_menu and selected_categories:
+        filtered_df = filtered_df[filtered_df['category'].isin(selected_categories)]
+
+    # 2. 태그 필터링
+    selected_tags_combined = selected_sweetness_tags + selected_utility_tags
+
+    if is_drink_menu:
+        # 2-1. 음료 필터링: 카테고리 AND 당도 태그 (더 엄격하게 필터링)
+        if selected_sweetness_tags:
+            temp_filtered_df = filtered_df[filtered_df['tags_list'].apply(lambda tags: any(tag in selected_sweetness_tags for tag in tags))]
+            if not temp_filtered_df.empty:
+                filtered_df = temp_filtered_df
+
     else:
-        filtered_df = df.copy()
-        
-    # 2. 당도 필터링 (음료에만 적용)
-    if is_drink and max_sweetness is not None and 'sweetness' in filtered_df.columns:
-        # max_sweetness 보다 당도가 낮거나 같은 메뉴만 선택
-        filtered_df = filtered_df[filtered_df['sweetness'] <= max_sweetness]
+        # 2-2. 베이커리 필터링: 당도 태그 OR 유틸리티 태그 (하나라도 만족하면 포함)
+        if selected_tags_combined:
+            temp_filtered_df = filtered_df[filtered_df['tags_list'].apply(lambda tags: any(tag in selected_tags_combined for tag in tags))]
+            if not temp_filtered_df.empty:
+                filtered_df = temp_filtered_df
 
+
+    # 필터링 결과가 없으면 종료
     if filtered_df.empty:
         return []
 
-    # 3. 조합 생성
     recommendations = []
     
-    # 음료/베이커리 조합 생성
-    if n_items == 1 and not is_drink: # 단일 베이커리 추천 (n_bakery=1)
-         items = filtered_df.sample(frac=1).sort_values(by='price', ascending=True)
-         for _, row in items.iterrows():
-             if max_price is None or row['price'] <= max_price:
-                 recommendations.append([(row['name'], row['price'])])
-                 if len(recommendations) >= 100:
-                     break
-    elif n_items == 1 and is_drink: # 단일 음료 추천 (음료는 항상 1개 메뉴만 선택)
-        items = filtered_df.sample(frac=1).sort_values(by='price', ascending=True)
+    # --- 3. 조합 또는 단일 아이템 추천 ---
+    
+    if n_items == 1: # 단일 아이템 추천 (음료)
+        items = filtered_df.sort_values(by=['popularity_score', 'price'], ascending=[False, True])
+        
         for _, row in items.iterrows():
             if max_price is None or row['price'] <= max_price:
-                recommendations.append([(row['name'], row['price'])])
+                recommendations.append([{
+                    'name': row['name'], 
+                    'price': row['price'], 
+                    'tags': row['tags_list'],
+                    'popularity': row['popularity_score']
+                }])
                 if len(recommendations) >= 100:
                     break
-    else:
-        # 여러 아이템 조합 (베이커리 n_bakery > 1 또는 음료 n_people > 1)
-        
-        # itertools.combinations/product를 위한 데이터셋 준비
-        if len(filtered_df) > 15 and not is_drink:
-             # 베이커리 조합이 너무 많으면 일부만 선택 (메모리 제한)
-            subset = filtered_df.sample(n=min(15, len(filtered_df)), random_state=42)
-        elif len(filtered_df) > 10 and is_drink:
-             # 음료 조합이 너무 많으면 일부만 선택
-             subset = filtered_df.sample(n=min(10, len(filtered_df)), random_state=42)
+    else: # n_items > 1 (베이커리 조합)
+        if len(filtered_df) > 15:
+            subset = filtered_df.sort_values(by='popularity_score', ascending=False).head(15)
         else:
             subset = filtered_df
-        
-        # 음료: 인원수(n_items)만큼 중복을 허용하여 선택 (itertools.product)
-        # 베이커리: n_items만큼 중복 없이 선택 (itertools.combinations)
-        if is_drink:
-            all_combinations = list(itertools.product(subset.itertuples(index=False), repeat=n_items))
-        else:
-            # 베이커리는 중복 없이 선택
-            all_combinations = list(itertools.combinations(subset.itertuples(index=False), n_items))
 
-
-        random.shuffle(all_combinations) # 랜덤하게 섞어 다양한 결과 유도
+        all_combinations = list(itertools.combinations(subset.itertuples(index=False), n_items))
+        random.shuffle(all_combinations)
 
         for combo in all_combinations:
             total_price = sum(item.price for item in combo)
             if max_price is None or total_price <= max_price:
-                # 음료 조합의 경우, 어떤 메뉴를 선택했는지와 가격을 조합 리스트에 추가
-                recommendations.append([(item.name, item.price) for item in combo])
-                if len(recommendations) >= 100: # 최대 100개까지만 생성
+                combo_result = [{
+                    'name': item.name, 
+                    'price': item.price, 
+                    'tags': item.tags_list,
+                    'popularity': item.popularity_score
+                } for item in combo]
+                recommendations.append(combo_result)
+                if len(recommendations) >= 200:
                     break
     
     return recommendations
+
+
+# --- 가중치 기반 점수 계산 함수 ---
+def calculate_weighted_score(combo_items, selected_tags):
+    """
+    태그 일치도(70%)와 인기 점수(30%)를 가중 평균하여 최종 점수(100점 만점)를 계산
+    """
+    
+    # --- 1. 태그 일치도 (Tag Match Score) 계산 (70% 가중치) ---
+    if not selected_tags:
+        tag_match_score = 100 
+    else:
+        total_items = len(combo_items)
+        if total_items == 0:
+            tag_match_score = 0
+        else:
+            total_matches = 0
+            selected_tags_set = set(selected_tags)
+
+            for item in combo_items:
+                item_tags_set = set(item['tags'])
+                if item_tags_set.intersection(selected_tags_set):
+                    total_matches += 1 
+            
+            tag_match_score = (total_matches / total_items) * 100
+
+    # --- 2. 인기 점수 (Popularity Score) 계산 (30% 가중치) ---
+    total_popularity = sum(item['popularity'] for item in combo_items)
+    avg_popularity_score = total_popularity / len(combo_items) if combo_items else 0
+    popularity_score_100 = avg_popularity_score * 10 
+    
+    # --- 3. 최종 가중치 점수 계산 (100점 만점) ---
+    WEIGHT_TAG = 0.7
+    WEIGHT_POPULARITY = 0.3
+    
+    final_score = (tag_match_score * WEIGHT_TAG) + (popularity_score_100 * WEIGHT_POPULARITY)
+    
+    return round(final_score, 1)
 
 
 # --- Streamlit 앱 구성 ---
 
 st.set_page_config(page_title="AI 베이커리 메뉴 추천 시스템", layout="wide")
 
-# 사이드바: 메뉴판 탭의 이미지를 위해 PIL 사용
+# Image loading function (in case file is missing)
 def load_image(image_path):
-    # 이미지 파일이 제공되지 않았으므로 None을 반환합니다.
     try:
         return Image.open(image_path)
     except FileNotFoundError:
@@ -143,157 +223,250 @@ tab_recommendation, tab_menu_board = st.tabs(["AI 메뉴 추천", "메뉴판"])
 
 with tab_recommendation:
     st.title("💡 AI 메뉴 추천 시스템")
-    st.subheader("예산과 취향에 맞는 최고의 조합을 찾아보세요!")
+    st.subheader("예산, 카테고리, 취향, 인기를 고려한 최고의 조합을 찾아보세요!")
     st.markdown("---")
 
-    # 1. 설정 섹션
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+    # 1. 설정 섹션 (5개의 컬럼으로 분할)
+    col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 2])
 
     with col1:
-        st.markdown("#### 💰 예산 설정")
-        # 예산 무제한 체크박스
-        budget_unlimited = st.checkbox("예산 무제한", value=True)
-        
-        # 예산 슬라이더
-        if budget_unlimited:
-            budget = float('inf') # 무한대로 설정
-            st.slider("최대 예산 설정", min_value=5000, max_value=30000, value=30000, step=1000, disabled=True)
-        else:
-            budget = st.slider("최대 예산 설정", min_value=5000, max_value=30000, value=15000, step=1000)
+        st.markdown("#### 👤 인원수")
+        n_people = st.number_input("함께하는 인원수", min_value=1, max_value=10, value=2, step=1)
 
     with col2:
-        st.markdown("#### 🧑‍🤝‍🧑 인원 / 🥖 베이커리 개수")
-        # 인원 설정 (음료 수량)
-        n_people = st.slider("인원 (음료 수량)", min_value=1, max_value=5, value=1, step=1)
-        # 베이커리 개수
-        n_bakery = st.slider("추천받을 베이커리 개수", min_value=1, max_value=5, value=2, step=1)
+        st.markdown("#### 💰 예산 (1인 기준)")
+        budget_unlimited = st.checkbox("예산 무제한", value=True)
         
+        if budget_unlimited:
+            budget = float('inf') 
+            st.slider("최대 예산 설정", min_value=5000, max_value=50000, value=50000, step=1000, disabled=True)
+        else:
+            budget = st.slider("최대 예산 설정 (1인 기준)", min_value=5000, max_value=50000, value=15000, step=1000)
+
     with col3:
-        st.markdown("#### 🌡️ 당도 설정 (음료)")
-        # 당도 설정 (0: 무당 ~ 4: 고당)
-        max_sweetness = st.slider(
-            "최대 당도 선호도 (0~4)", 
-            min_value=0, max_value=4, value=4, step=1, 
-            help="0: 무당, 4: 고당. 선택한 값 이하의 당도를 가진 음료만 추천됩니다."
-        )
+        st.markdown("#### 🥖 베이커리 개수")
+        n_bakery = st.slider("추천받을 베이커리 개수 (1인)", min_value=1, max_value=5, value=2, step=1)
 
     with col4:
-        st.markdown("#### 🏷️ 해시태그 선택 (최대 3개)")
-        selected_tags = st.multiselect(
-            "취향에 맞는 태그를 선택하세요.",
-            options=all_tags,
+        st.markdown("#### ☕ 음료 카테고리")
+        # --- 1. 음료 카테고리 선택 (독립) ---
+        selected_categories = st.multiselect(
+            "선호 음료 카테고리",
+            options=all_drink_categories,
+            default=all_drink_categories,
+            placeholder="예: 커피, 티",
+        )
+        
+    with col5:
+        st.markdown("#### 🏷️ 선호 태그 (최대 3개씩)")
+        # --- 2. 당도/맛 태그 선택 (음료/베이커리 공통) ---
+        selected_sweetness_tags = st.multiselect(
+            "선호 당도/맛 태그 (음료 필터링 기준)",
+            options=ui_sweetness_tags,
             default=[],
             max_selections=3,
-            placeholder="예: 달콤한, 고소한, 든든한"
+            placeholder="예: 달콤한, 쌉싸름한",
+        )
+        # --- 3. 베이커리 전용 태그 선택 (베이커리 필터링 기준) ---
+        selected_utility_tags = st.multiselect(
+            "선호 베이커리 태그 (베이커리 필터링 기준)",
+            options=ui_utility_tags,
+            default=[],
+            max_selections=3,
+            placeholder="예: 든든한, 간단한",
         )
     
     st.markdown("---")
 
     # 2. 추천 실행 버튼
     if st.button("AI 추천 메뉴 조합 받기", type="primary", use_container_width=True):
-        st.markdown("### 🏆 AI 추천 메뉴 조합 3세트")
+        st.markdown("### 🏆 AI 추천 메뉴 조합")
         
-        # 예산 할당: 전체 예산(budget) 기준으로 필터링 로직 단순화
-        max_drink_price = budget
-        total_max_price = budget
+        max_price_per_set = budget
 
-        # --- 추천 생성 ---
+        # --- 추천 생성 (1인 세트 기준) ---
         
-        # 1. 음료 추천 (인원수만큼 n_people개의 음료 조합)
-        # is_drink=True로 설정하여 당도 필터링을 활성화
-        drink_recommendations = recommend_menu(
-            drink_df, selected_tags, n_people, 
-            max_price=max_drink_price, max_sweetness=max_sweetness, 
-            is_drink=True
-        )
+        # 1. 음료 추천 (1개) - 카테고리 및 당도 태그 필터링 적용
+        # NOTE: 음료는 유틸리티 태그(든든한 등)는 무시함
+        drink_recommendations = recommend_menu(drink_df, selected_sweetness_tags, [], 1, max_price=max_price_per_set, selected_categories=selected_categories)
         
-        # 2. 베이커리 추천 (n_bakery개의 베이커리 조합)
-        bakery_recommendations = recommend_menu(
-            bakery_df, selected_tags, n_bakery, 
-            max_price=total_max_price, 
-            is_drink=False # 베이커리는 당도 필터링 미적용 (태그로 대체)
-        )
+        # 2. 베이커리 추천 (n_bakery 개) - 당도 태그 OR 유틸리티 태그 필터링 적용
+        bakery_recommendations = recommend_menu(bakery_df, selected_sweetness_tags, selected_utility_tags, n_bakery, max_price=max_price_per_set)
         
         
         if not drink_recommendations or not bakery_recommendations:
-            st.warning("선택하신 조건에 맞는 메뉴를 찾지 못했습니다. 태그, 인원, 당도, 예산을 조정해 주세요.")
-        else:
-            # 3. 최종 조합 생성
             
-            # 음료 조합과 베이커리 조합을 결합
+            if not drink_recommendations:
+                st.warning(f"⚠️ **음료 추천 실패:** 선택된 카테고리/당도 태그 및 1인 예산({max_price_per_set:,}원)에 맞는 음료를 찾을 수 없습니다.")
+            if not bakery_recommendations:
+                st.warning(f"⚠️ **베이커리 추천 실패:** 설정된 조건(태그/예산)에 맞는 베이커리 조합이 없습니다. 베이커리 개수를 줄이거나 예산을 높여주세요.")
+            
+            if drink_recommendations and bakery_recommendations:
+                 st.warning("선택하신 조건에 맞는 메뉴 조합을 찾지 못했습니다. 태그나 예산을 조정해 주세요.")
+
+
+        else:
+            # 3. 최종 조합 생성 및 스코어링
             all_combinations = list(itertools.product(drink_recommendations, bakery_recommendations))
-            random.shuffle(all_combinations)
+            random.shuffle(all_combinations) 
 
             final_sets = []
+            # 점수 계산에 사용할 태그 목록 (모든 선택된 태그)
+            all_selected_tags_for_score = selected_sweetness_tags + selected_utility_tags
             
             for drink_combo, bakery_combo in all_combinations:
+                # 1세트 가격 계산
+                drink_price = drink_combo[0]['price']
+                bakery_price_sum = sum(item['price'] for item in bakery_combo)
+                total_price_per_set = drink_price + bakery_price_sum
                 
-                # 음료 가격 합산
-                drink_price_sum = sum(price for name, price in drink_combo)
-                
-                # 베이커리 가격 합산
-                bakery_price_sum = sum(price for name, price in bakery_combo)
-                
-                total_price = drink_price_sum + bakery_price_sum
-                
-                if budget == float('inf') or total_price <= budget:
+                # 전체 아이템 (점수 계산용)
+                all_items = drink_combo + bakery_combo
+
+                if max_price_per_set == float('inf') or total_price_per_set <= max_price_per_set:
+                    # 가중치 점수 계산: 모든 선택 태그를 기준으로 일치도를 계산
+                    weighted_score = calculate_weighted_score(all_items, all_selected_tags_for_score)
+                    
                     final_sets.append({
-                        "drink": drink_combo,
+                        "score": weighted_score,
+                        "drink": drink_combo[0], 
                         "bakery": bakery_combo,
-                        "total_price": total_price
+                        "total_price_per_set": total_price_per_set,
+                        "total_price_for_n_people": total_price_per_set * n_people
                     })
                 
-                if len(final_sets) >= 3:
+                if len(final_sets) >= 200: 
                     break
 
             if not final_sets:
-                st.warning("선택하신 조건에 맞는 메뉴 조합을 찾지 못했습니다. 태그, 인원, 당도, 예산을 조정해 주세요.")
+                st.warning("선택하신 조건에 맞는 메뉴 조합을 찾지 못했습니다. 태그나 예산을 조정해 주세요.")
             else:
-                for i, result in enumerate(final_sets):
-                    st.markdown(f"#### ☕️ 세트 {i+1} (총 가격: **{result['total_price']:,}원**)")
+                # 점수 순으로 정렬하고 상위 3개만 선택
+                final_sets.sort(key=lambda x: x['score'], reverse=True)
+                top_3_sets = final_sets[:3]
+
+                for i, result in enumerate(top_3_sets):
+                    # 점수 표시
+                    st.markdown(f"#### 🥇 세트 {i+1} - 추천 점수: **{result['score']}점** / 100점")
                     
-                    st.markdown(f"##### 음료 🥤 ({n_people}잔)")
-                    # 음료 목록을 문자열로 포맷팅
-                    drink_list_str = " / ".join([f"{name} ({price:,}원)" for name, price in result['drink']])
-                    st.info(f"{drink_list_str}")
+                    # 가격 정보 표시 (총 가격은 1인 세트 가격 * N명으로 계산)
+                    st.markdown(f"**1인 세트 가격:** {result['total_price_per_set']:,}원")
+                    st.markdown(f"**{n_people}명 예상 총 가격:** **{result['total_price_for_n_people']:,}원** (1인 세트 {n_people}개 기준)")
                     
-                    st.markdown(f"##### 베이커리 🍞 ({n_bakery}개)")
-                    # 베이커리 목록을 문자열로 포맷팅
-                    bakery_list_str = " / ".join([f"{name} ({price:,}원)" for name, price in result['bakery']])
-                    st.success(f"{bakery_list_str}")
+                    # --- N-people Drink Recommendation Logic ---
+                    st.markdown(f"##### 음료 🥤 ({n_people}개 추천)")
+
+                    # 1. 1인 세트의 대표 음료
+                    primary_drink = result['drink']
+
+                    # 2. 나머지 인원수만큼 인기 순위 기반의 다른 음료 선택
+                    other_drinks = []
+                    if n_people > 1:
+                        # 대표 음료를 제외하고, 선택된 카테고리 및 당도 태그 내에서 필터링
+                        available_drinks = drink_df[drink_df['name'] != primary_drink['name']].copy()
+                        
+                        # 필터링 로직을 다시 적용하여 나머지 음료 옵션을 찾음
+                        filtered_options = available_drinks[available_drinks['category'].isin(selected_categories)].copy()
+                        if selected_sweetness_tags:
+                            filtered_options = filtered_options[filtered_options['tags_list'].apply(lambda tags: any(tag in selected_sweetness_tags for tag in tags))]
+
+                        # 인기 점수 순으로 정렬하여 선택
+                        other_drink_options = filtered_options.sort_values(by='popularity_score', ascending=False)
+                        
+                        num_additional_drinks = min(n_people - 1, len(other_drink_options))
+                        
+                        selected_others = other_drink_options.head(num_additional_drinks)
+                        
+                        other_drinks = [{
+                            'name': row['name'], 
+                            'price': row['price'], 
+                            'tags': row['tags_list'],
+                            'popularity': row['popularity_score']
+                        } for _, row in selected_others.iterrows()]
                     
-                    if i < len(final_sets) - 1:
+                    # 최종 추천 음료 목록 (대표 음료가 맨 앞에 오도록)
+                    display_drinks = [primary_drink] + other_drinks
+                    
+                    for j, d in enumerate(display_drinks):
+                        drink_tags_str = ", ".join(f"#{t}" for t in d['tags'] if t != '인기')
+                        is_popular = " (인기 메뉴!)" if d['popularity'] == 10 else ""
+                        bullet = "★" if j == 0 else "•" # 대표 음료에 별표 표시
+                        
+                        category_info = drink_df[drink_df['name'] == d['name']]['category'].iloc[0]
+                        
+                        st.info(f"{bullet} **{d['name']}** ({d['price']:,}원) - *카테고리: {category_info}*{is_popular} - *태그: {drink_tags_str}*")
+                    # ----------------------------------------
+                    
+                    st.markdown(f"##### 베이커리 🍞 ({n_bakery}개 추천)")
+                    # Format bakery list
+                    for item in result['bakery']:
+                        bakery_tags_str = ", ".join(f"#{t}" for t in item['tags'] if t != '인기')
+                        is_popular = " (인기 메뉴!)" if item['popularity'] == 10 else ""
+                        st.success(f"• **{item['name']}** ({item['price']:,}원){is_popular} - *태그: {bakery_tags_str}*")
+                    
+                    if i < len(top_3_sets) - 1:
                         st.markdown("---")
             
-    st.caption("※ 추천 로직은 선택된 해시태그를 포함하며, 설정된 인원수와 당도 선호도를 반영하여 예산 내에서 조합을 추출합니다.")
+    st.caption("※ 추천 점수(100점 만점)는 **태그 일치도(70%)**와 메뉴의 **인기 점수(30%)**를 가중치로 계산한 값입니다. 인원수만큼 음료를 추천하며, 가장 점수가 높은 음료에 ★이 표시됩니다.")
+
+    # --- Expander added here for detailed explanation ---
+    with st.expander("점수 계산 방법 자세히 보기"):
+        st.markdown("""
+        이 추천 점수는 사용자의 취향과 메뉴의 인기를 균형 있게 반영하기 위해 가중치를 적용하여 계산됩니다.
+        
+        **최종 점수 = (태그 일치도 × 70%) + (인기 점수 × 30%)**
+        
+        #### 1. 태그 일치도 (70% 반영)
+        * **계산 방식:** 추천된 세트 내의 **전체 메뉴** 중에서, 사용자가 선택한 **모든 선호 해시태그(당도/맛 + 베이커리 태그)**를 하나라도 포함하는 메뉴의 비율을 100점 만점으로 환산합니다.
+        * **예시:** 3개의 메뉴가 포함된 세트에서 2개 메뉴만 선택 태그를 포함하면 태그 일치도는 (2/3) * 100 ≈ 66.7점입니다.
+        
+        #### 2. 인기 점수 (30% 반영)
+        * **계산 방식:** 메뉴 시트에 `#인기` 태그가 있으면 10점, 없으면 5점(기본점)이 부여됩니다. 세트 내 모든 메뉴의 **평균 인기 점수**를 100점 만점으로 환산하여 반영합니다.
+        * **예시:** 세트의 평균 인기 점수가 8점이면, 8 * 10 = 80점으로 환산되어 30%의 가중치가 적용됩니다.
+        
+        최종적으로 이 두 점수를 합산하여 가장 높은 점수를 받은 메뉴 조합을 상위 3개로 보여줍니다.
+        """)
+    # --- End of Expander ---
+
 
 with tab_menu_board:
     st.title("📋 메뉴판")
     st.markdown("---")
+    st.markdown("##### 🔍 CSV 파일을 직접 수정하여 메뉴, 가격, 태그를 변경할 수 있습니다.")
 
-    # 이미지 로드 및 표시
+    # Image loading and display (in case file is missing)
     img1 = load_image("menu_board_1.png")
     img2 = load_image("menu_board_2.png")
     
     col_img1, col_img2 = st.columns(2)
 
     with col_img1:
-        st.subheader("메뉴판 1 (베이커리)")
+        st.subheader("베이커리 메뉴")
         if img1:
             st.image(img1, caption="Bakery 메뉴판 (1/2)", use_column_width=True)
         else:
-            st.warning("`menu_board_1.png` 파일을 찾을 수 없어 메뉴판 이미지를 표시할 수 없습니다. 대신 데이터 테이블을 표시합니다.")
-            display_df = bakery_df.drop(columns=['tags_list', 'tags']).rename(columns={'name': '메뉴', 'price': '가격', 'sweetness': '당도(0-4)'})
-            st.dataframe(display_df, use_container_width=True)
+            # 'tags'는 원본 컬럼(sweetness) 값을 사용하도록 복사
+            display_bakery_df = bakery_df.copy()
+            # 원본 컬럼이 'sweetness'였을 수 있으므로 이를 '당도/태그'로 표시
+            display_bakery_df = display_bakery_df.rename(columns={'name': '메뉴', 'price': '가격', 'tags': '당도/태그'})
+            display_bakery_df['인기점수'] = display_bakery_df['popularity_score']
+            display_bakery_df = display_bakery_df[['메뉴', '가격', '당도/태그', '인기점수']]
+
+            st.dataframe(display_bakery_df, use_container_width=True)
 
 
     with col_img2:
-        st.subheader("메뉴판 2 (음료)")
+        st.subheader("음료 메뉴")
         if img2:
             st.image(img2, caption="Drink 메뉴판 (2/2)", use_column_width=True)
         else:
-            st.warning("`menu_board_2.png` 파일을 찾을 수 없어 메뉴판 이미지를 표시할 수 없습니다. 대신 데이터 테이블을 표시합니다.")
-            display_df = drink_df.drop(columns=['tags_list', 'tags']).rename(columns={'name': '메뉴', 'price': '가격', 'sweetness': '당도(0-4)'})
-            st.dataframe(display_df, use_container_width=True)
+            # 'tags'는 원본 컬럼(sweetness) 값을 사용하도록 복사
+            display_drink_df = drink_df.copy()
+            display_drink_df = display_drink_df.rename(columns={'name': '메뉴', 'price': '가격', 'tags': '당도/태그', 'category': '카테고리'})
+            display_drink_df['인기점수'] = display_drink_df['popularity_score']
+            display_drink_df = display_drink_df[['메뉴', '가격', '카테고리', '당도/태그', '인기점수']]
+            
+            st.dataframe(display_drink_df, use_container_width=True)
 
-  
+    st.caption("※ 이미지 파일(`menu_board_1.png`, `menu_board_2.png`)이 앱이 실행되는 폴더에 있어야 정상적으로 표시됩니다.")
+
