@@ -21,6 +21,7 @@ except Exception as e:
 def preprocess_tags(df):
     """CSV의 tags 컬럼을 클린징하고 리스트로 변환합니다."""
     # NaN 처리, 문자열 변환, 양쪽 공백 제거, 쉼표 및 샵 제거 후 분리
+    # tags 컬럼이 '#태그1,#태그2' 형식으로 되어 있으므로 쉼표와 샵을 모두 처리
     df['tags_list'] = df['tags'].fillna('').astype(str).str.strip().str.replace('#', '').str.split(r'\s*,\s*')
     # 빈 문자열 및 공백 제거
     df['tags_list'] = df['tags_list'].apply(lambda x: [tag.strip() for tag in x if tag.strip()])
@@ -164,7 +165,7 @@ with tab_recommendation:
 
     with col1:
         st.markdown("#### 👤 인원수")
-        n_people = st.number_input("함께하는 인원수", min_value=1, max_value=10, value=2, step=1)
+        n_people = st.number_input("인원수만큼 음료를 추천해드려요.", min_value=1, max_value=10, value=2, step=1)
 
     with col2:
         st.markdown("#### 💰 예산 설정 (1인 기준)")
@@ -191,7 +192,7 @@ with tab_recommendation:
             options=all_tags,
             default=[],
             max_selections=3,
-            placeholder="예: #달콤한, #고소한, #든든한"
+            placeholder="예: #달콤한, #고소한, #든든한, #쫄깃한"
         )
     
     st.markdown("---")
@@ -259,7 +260,7 @@ with tab_recommendation:
                     if i < len(top_3_sets) - 1:
                         st.markdown("---")
             
-  
+   
 
 with tab_menu_board:
     st.title("📋 베이커리 메뉴판")
@@ -275,4 +276,3 @@ with tab_menu_board:
         st.warning("`menu_board_1.png` 파일을 찾을 수 없어 이미지 대신 데이터 테이블을 표시합니다.")
         st.dataframe(bakery_df.drop(columns=['tags_list', 'popularity_score']).rename(columns={'name': '메뉴', 'price': '가격', 'tags': '태그'}), use_container_width=True)
 
-   
