@@ -3,7 +3,7 @@ import pandas as pd
 import random
 import itertools
 from PIL import Image
-[theme]
+
 font = "Jua"
 # --- 데이터 로드 및 컬럼 정규화 함수 ---
 
