@@ -165,12 +165,12 @@ with tab_recommendation:
 
     with col1:
         st.markdown("#### 👤 인원수")
-        n_people = st.number_input("인원수만큼 음료를 추천해드려요.", min_value=1, max_value=10, value=2, step=1)
+        n_people = st.number_input("인원수를 조정해주세요", min_value=1, max_value=10, value=2, step=1)
 
     with col2:
         st.markdown("#### 💰 예산 설정 (1인 기준)")
         # 예산 무제한 체크박스
-        budget_unlimited = st.checkbox("예산 무제한", value=True)
+        budget_unlimited = st.checkbox("예산 무제한!", value=True)
         
         # 예산 슬라이더
         if budget_unlimited:
