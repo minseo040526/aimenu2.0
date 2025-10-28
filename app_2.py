@@ -176,7 +176,7 @@ tab_recommendation, tab_menu_board = st.tabs(["AI 메뉴 추천", "메뉴판"])
 
 with tab_recommendation:
     st.title("💡 AI 메뉴 추천 시스템")
-    st.subheader("예산, 취향, 인기를 고려한 최고의 조합을 찾아보세요!")
+    st.subheader("예산과 취향을 고려한 최고의 조합을 찾아보세요!")
     st.markdown("---")
 
     # 1. 설정 섹션
@@ -184,7 +184,7 @@ with tab_recommendation:
 
     with col1:
         st.markdown("#### 👤 인원수")
-        n_people = st.number_input("함께하는 인원수", min_value=1, max_value=10, value=2, step=1)
+        n_people = st.number_input("인원수만큼 음료를 추천해드려요.", min_value=1, max_value=10, value=2, step=1)
 
     with col2:
         st.markdown("#### 💰 예산 설정 (1인 기준)")
@@ -295,9 +295,7 @@ with tab_recommendation:
                     
                     if i < len(top_3_sets) - 1:
                         st.markdown("---")
-            
-    st.caption("※ 추천 점수(100점 만점)는 **태그 일치도(70%)**와 메뉴의 **인기 점수(30%)**를 가중치로 계산한 값입니다. '인기 메뉴!'는 메뉴 시트에 `#인기` 태그가 있는 경우 자동으로 부여됩니다.")
-
+   
 with tab_menu_board:
     st.title("📋 메뉴판")
     st.markdown("---")
