@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import random
@@ -7,11 +6,11 @@ from PIL import Image
 
 # --- 데이터 로드 ---
 try:
-    # 파일 경로가 실제 환경에 맞게 조정될 수 있습니다.
+    # CSV 파일 로드
     bakery_df = pd.read_csv("Bakery_menu.csv")
     drink_df = pd.read_csv("Drink_menu.csv")
 except FileNotFoundError:
-    st.error("메뉴 CSV 파일을 찾을 수 없습니다. 파일 이름을 확인해주세요.")
+    st.error("메뉴 CSV 파일을 찾을 수 없습니다. 'Bakery_menu.csv'와 'Drink_menu.csv' 파일을 확인해주세요.")
     st.stop()
 except Exception as e:
     st.error(f"메뉴 CSV 파일을 로드하는 중 오류가 발생했습니다: {e}")
@@ -59,7 +58,7 @@ def recommend_menu(df, selected_tags, n_items, max_price=None):
     # 베이커리 추천: n_items 만큼 조합 생성
     if df is bakery_df:
         if n_items == 1:
-             # 단일 베이커리 추천 (랜덤 섞기 후 가격순 정렬하여 다양성 확보)
+            # 단일 베이커리 추천 (랜덤 섞기 후 가격순 정렬하여 다양성 확보)
             items = filtered_df.sample(frac=1).sort_values(by='price', ascending=True)
             for _, row in items.iterrows():
                 if max_price is None or row['price'] <= max_price:
@@ -69,7 +68,8 @@ def recommend_menu(df, selected_tags, n_items, max_price=None):
         else:
             # itertools.combinations로 조합 생성 (메모리 및 시간 제한을 위해 작은 데이터셋 사용)
             if len(filtered_df) > 15: # 조합 가능한 아이템이 너무 많으면 일부만 선택
-                subset = filtered_df.sample(n=min(15, len(filtered_df)))
+                # sample()을 사용하면 DataFrame의 복사본을 반환하므로 안전합니다.
+                subset = filtered_df.sample(n=min(15, len(filtered_df)), random_state=42)
             else:
                 subset = filtered_df
 
@@ -101,13 +101,13 @@ st.set_page_config(page_title="AI 베이커리 메뉴 추천 시스템", layout=
 
 # 사이드바: 메뉴판 탭의 이미지를 위해 PIL 사용
 def load_image(image_path):
+    # 이미지 파일이 제공되지 않았으므로 None을 반환합니다.
+    # 실제로 이미지를 사용하려면 'menu_board_1.png'와 'menu_board_2.png' 파일을 추가해야 합니다.
     try:
         return Image.open(image_path)
     except FileNotFoundError:
-        st.error(f"이미지 파일 '{image_path}'을 찾을 수 없습니다. 파일 경로를 확인해주세요.")
         return None
-    except Exception as e:
-        st.error(f"이미지 로드 중 오류 발생: {e}")
+    except Exception:
         return None
 
 
@@ -131,7 +131,8 @@ with tab_recommendation:
         # 예산 슬라이더
         if budget_unlimited:
             budget = float('inf') # 무한대로 설정
-            st.slider("최대 예산 설정", min_value=5000, max_value=30000, value=20000, step=1000, disabled=True)
+            # 무제한일 경우 슬라이더는 비활성화
+            st.slider("최대 예산 설정", min_value=5000, max_value=30000, value=30000, step=1000, disabled=True)
         else:
             budget = st.slider("최대 예산 설정", min_value=5000, max_value=30000, value=15000, step=1000)
 
@@ -155,27 +156,17 @@ with tab_recommendation:
     if st.button("AI 추천 메뉴 조합 받기", type="primary", use_container_width=True):
         st.markdown("### 🏆 AI 추천 메뉴 조합 3세트")
         
-        # 예산 분배 (간단하게 음료 최소가 4000원 가정)
-        # 예산이 무제한이거나 충분하면 모두 사용 가능
-        if budget == float('inf'):
-            max_drink_price = float('inf')
-            max_bakery_price = float('inf')
-            total_max_price = float('inf')
-        else:
-            # 예산 내에서 음료 1개 + 베이커리 n개 조합
-            # 가장 저렴한 음료(4000원 가정)를 제외하고 남은 금액을 베이커리에 할당할 수 있도록
-            # 조합 추천 시에 전체 예산(budget)을 기준으로 필터링하도록 로직 단순화
-            max_drink_price = budget 
-            total_max_price = budget
+        # 예산 할당: 전체 예산(budget) 기준으로 필터링 로직 단순화
+        max_drink_price = budget
+        total_max_price = budget
 
         # --- 추천 생성 ---
         
         # 1. 음료 추천
+        # n_items=1은 recommend_menu 함수 내부에서 처리됨 (음료는 항상 1개)
         drink_recommendations = recommend_menu(drink_df, selected_tags, 1, max_price=max_drink_price)
         
         # 2. 베이커리 추천
-        # 전체 예산에서 가장 저렴한 음료 가격(4000원)을 빼고 베이커리 예산을 잡을 수도 있지만,
-        # 여기서는 음료와 베이커리를 독립적으로 추천 후 조합의 전체 가격을 필터링하는 방식으로 진행
         bakery_recommendations = recommend_menu(bakery_df, selected_tags, n_bakery, max_price=total_max_price)
         
         
@@ -183,7 +174,6 @@ with tab_recommendation:
             st.warning("선택하신 조건에 맞는 메뉴를 찾지 못했습니다. 태그나 예산을 조정해 주세요.")
         else:
             # 3. 최종 조합 생성
-            # 상위 100개 음료, 100개 베이커리 조합 중에서 예산에 맞는 3세트 랜덤 추출
             
             # 음료와 베이커리 조합: (음료, 베이커리)
             all_combinations = list(itertools.product(drink_recommendations, bakery_recommendations))
@@ -211,7 +201,7 @@ with tab_recommendation:
                     break
 
             if not final_sets:
-                 st.warning("선택하신 조건에 맞는 메뉴 조합을 찾지 못했습니다. 태그나 예산을 조정해 주세요.")
+                st.warning("선택하신 조건에 맞는 메뉴 조합을 찾지 못했습니다. 태그나 예산을 조정해 주세요.")
             else:
                 for i, result in enumerate(final_sets):
                     st.markdown(f"#### ☕️ 세트 {i+1} (총 가격: **{result['total_price']:,}원**)")
@@ -226,7 +216,7 @@ with tab_recommendation:
                     
                     if i < len(final_sets) - 1:
                         st.markdown("---")
-        
+            
     st.caption("※ 추천 로직은 선택된 해시태그를 포함하며, 설정된 예산 내에서 랜덤하게 조합을 추출합니다.")
 
 with tab_menu_board:
@@ -234,6 +224,7 @@ with tab_menu_board:
     st.markdown("---")
 
     # 이미지 로드 및 표시
+    # 'menu_board_1.png'와 'menu_board_2.png' 파일이 없으므로 None을 반환하여 오류를 방지합니다.
     img1 = load_image("menu_board_1.png")
     img2 = load_image("menu_board_2.png")
     
@@ -243,12 +234,18 @@ with tab_menu_board:
         st.subheader("메뉴판 1")
         if img1:
             st.image(img1, caption="Bakery 메뉴판 (1/2)", use_column_width=True)
+        else:
+            st.warning("`menu_board_1.png` 파일을 찾을 수 없어 메뉴판 이미지를 표시할 수 없습니다. 대신 데이터 테이블을 표시합니다.")
+            st.dataframe(bakery_df.drop(columns=['tags_list', 'tags']).rename(columns={'name': '메뉴', 'price': '가격'}), use_container_width=True)
+
 
     with col_img2:
         st.subheader("메뉴판 2")
         if img2:
             st.image(img2, caption="Drink 메뉴판 (2/2)", use_column_width=True)
+        else:
+            st.warning("`menu_board_2.png` 파일을 찾을 수 없어 메뉴판 이미지를 표시할 수 없습니다. 대신 데이터 테이블을 표시합니다.")
+            st.dataframe(drink_df.drop(columns=['tags_list', 'tags']).rename(columns={'name': '메뉴', 'price': '가격'}), use_container_width=True)
 
-    st.caption("※ 이미지 파일(menu_board_1.png, menu_board_2.png)이 앱이 실행되는 폴더에 있어야 정상적으로 표시됩니다.")
+    st.caption("※ 이미지 파일(`menu_board_1.png`, `menu_board_2.png`)이 앱이 실행되는 폴더에 있어야 정상적으로 표시됩니다. 현재는 데이터 테이블로 대체 표시됩니다.")
 
-```
