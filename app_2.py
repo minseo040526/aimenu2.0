@@ -146,7 +146,7 @@ tab_reco, tab_board = st.tabs(["AI 메뉴 추천", "메뉴판"])
 
 with tab_reco:
     st.title("AI 메뉴 추천 시스템")
-    st.caption("고객 취향과 인기 정보를 함께 반영해 추천해 드립니다.")
+    st.caption("고객님의 취향과 인기 메뉴 정보를 반영해 AI가 추천합니다.")
 
     c1,c2,c3 = st.columns(3)
     with c1:
@@ -163,15 +163,16 @@ with tab_reco:
         st.subheader("베이커리")
         n_bakery = st.slider("베이커리 개수", 1, 5, 2)
         min_bak, max_bak = st.slider("당도(베이커리)", 1, 5, (1,5))
-        sel_bak_tags = st.multiselect("베이커리 태그(모두 포함)", ui_bakery_utility_tags, max_selections=3)
+        sel_bak_tags = st.multiselect("베이커리 태그", ui_bakery_utility_tags, max_selections=3)
 
     with c3:
         st.subheader("음료")
         sel_cats = st.multiselect("카테고리", all_drink_categories, default=all_drink_categories)
         min_drk, max_drk = st.slider("당도(음료)", 1, 5, (1,5))
-        sel_drk_tags = st.multiselect("맛 태그(모두 포함)", ui_drink_flavor_tags, max_selections=3)
+        sel_drk_tags = st.multiselect("맛 태그", ui_drink_flavor_tags, max_selections=3)
 
     st.markdown("---")
+
     if st.button("AI 추천받기", type="primary", use_container_width=True):
         drink_recs = recommend_menu_strict(drink_df, min_drk, max_drk, sel_drk_tags, 1, max_budget, sel_cats)
         bakery_recs = recommend_menu_strict(bakery_df, min_bak, max_bak, sel_bak_tags, n_bakery, max_budget)
@@ -220,6 +221,7 @@ with tab_reco:
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #ff5a5f;margin-right:6px;font-size:0.85rem}
 .kv{background:#fafafa;border:1px solid #eee;border-radius:8px;padding:8px 10px;margin-top:6px}
 .small{color:#666;font-size:0.9rem}
+.tag{display:inline-block;background:#fff4f4;color:#c44;border:1px solid #fbb;padding:2px 6px;border-radius:6px;margin:2px;font-size:0.85rem}
 </style>
         """, unsafe_allow_html=True)
 
@@ -229,13 +231,35 @@ with tab_reco:
             st.info("조건에 정확히 맞는 메뉴가 부족하여, AI가 유사한 옵션을 함께 추천했습니다.")
 
         for rank, r in enumerate(results[:top_k], start=1):
-            drink = r['drink']
+            base_drink = r['drink']
             bakery_list = r['bakery']
             per_price = r['total_price_per_set']
             total_price = per_price * n_people
 
-            drink_html = "선택하신 조건에 맞는 음료가 없습니다." if not drink else f"- {drink['name']} ({drink['price']:,}원) · 당도 {drink['sweetness']}"
-            bakery_html = "- 선택하신 조건에 맞는 베이커리가 없습니다." if not bakery_list else "<br>".join([f"- {b['name']} ({b['price']:,}원) · 당도 {b['sweetness']}" for b in bakery_list])
+            # --- 인원수만큼 음료 추천 ---
+            other_drinks = []
+            if n_people > 1:
+                available = drink_df[drink_df['name'] != base_drink['name']]
+                available = available[
+                    (available['sweetness'] >= min_drk) &
+                    (available['sweetness'] <= max_drk)
+                ]
+                if sel_cats:
+                    available = available[available['category'].isin(sel_cats)]
+                if sel_drk_tags:
+                    available = available[available['tags_list'].apply(lambda t: any(tag in sel_drk_tags for tag in t))]
+                available = available.sort_values(by='popularity_score', ascending=False)
+                num_add = min(n_people - 1, len(available))
+                for _, row in available.head(num_add).iterrows():
+                    other_drinks.append(row.to_dict())
+            drink_list = [base_drink] + other_drinks
+
+            def tag_html(tags):
+                tags = [t for t in tags if t != '인기']
+                return "".join([f"<span class='tag'>#{t}</span>" for t in tags]) if tags else "<span class='small'>태그 없음</span>"
+
+            drink_html = "<br>".join([f"- {d['name']} ({d['price']:,}원)<br>{tag_html(d['tags_list'])}" for d in drink_list])
+            bakery_html = "<br>".join([f"- {b['name']} ({b['price']:,}원)<br>{tag_html(b['tags_list'])}" for b in bakery_list])
 
             st.markdown(f"""
 <div class="card">
@@ -250,15 +274,13 @@ with tab_reco:
 
 with tab_board:
     st.title("메뉴판")
-    st.markdown("---")
-    img1 = load_image("menu_board_1.png")
-    img2 = load_image("menu_board_2.png")
+    img1,img2 = load_image("menu_board_1.png"),load_image("menu_board_2.png")
     c1,c2 = st.columns(2)
     with c1:
         st.subheader("베이커리")
         if img1: st.image(img1, caption="Bakery 메뉴판", use_column_width=True)
-        else: st.dataframe(bakery_df.rename(columns={'name':'메뉴','price':'가격','sweetness':'당도','tags':'태그'}), use_container_width=True)
+        else: st.dataframe(bakery_df)
     with c2:
         st.subheader("음료")
         if img2: st.image(img2, caption="Drink 메뉴판", use_column_width=True)
-        else: st.dataframe(drink_df.rename(columns={'name':'메뉴','price':'가격','sweetness':'당도','tags':'태그','category':'카테고리'}), use_container_width=True)
+        else: st.dataframe(drink_df)
