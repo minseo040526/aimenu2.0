@@ -246,7 +246,7 @@ with tab_reco:
 if st.button("AI 추천 메뉴 조합 받기", type="primary", use_container_width=True):
     st.markdown("### 🏆 AI 추천 메뉴 조합")
     if not results:
-    st.warning("예산에 맞는 메뉴가 없습니다. 조건 설정을 다시 해주세요")
+        st.warning("예산에 맞는 메뉴가 없습니다. 조건 설정을 다시 해주세요")
 else:
     # ====== 컴팩트 모드 ======
     compact = st.checkbox("컴팩트 보기", value=True)
