@@ -212,7 +212,7 @@ with tab_reco:
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
-        st.markdown("#### 👤 인원 & 💰 예산")
+        st.markdown("#### 👤 인원 & 💰 예산 (인원 수만큼 음료를 추천해드려요!)")
         n_people = st.number_input("인원수", min_value=1, max_value=10, value=2, step=1)
         budget_unlimited = st.checkbox("예산 무제한", value=True)
         if budget_unlimited:
@@ -243,83 +243,62 @@ with tab_reco:
 
     st.markdown("---")
 
-    if st.button("AI 추천 메뉴 조합 받기", type="primary", use_container_width=True):
-        st.markdown("### 🏆 AI 추천 메뉴 조합")
+if st.button("AI 추천 메뉴 조합 받기", type="primary", use_container_width=True):
+    st.markdown("### 🏆 AI 추천 메뉴 조합")
+    if not results:
+    st.warning("예산에 맞는 메뉴가 없습니다. 조건 설정을 다시 해주세요")
+else:
+    # ====== 컴팩트 모드 ======
+    compact = st.checkbox("컴팩트 보기", value=True)
 
-        drink_recs = recommend_menu(
-            drink_df, min_drk, max_drk, selected_drink_tags, 1,
-            max_price=max_budget, selected_categories=selected_categories
-        )
-        bakery_recs = recommend_menu(
-            bakery_df, min_bak, max_bak, selected_bakery_tags, n_bakery,
-            max_price=max_budget
-        )
+    # 점수순 정렬 + 상위 N 선택
+    results.sort(key=lambda x: x['score'], reverse=True)
+    topN = st.slider("표시 개수", 3, 20, 6, 1)
+    top = results[:topN]
 
-        if not drink_recs and not bakery_recs:
-            st.warning("조건에 맞는 메뉴가 없어. 범위를 넓혀봐.")
-            st.stop()
+    import pandas as pd
+    table = []
+    for i, r in enumerate(top, start=1):
+        drink_name = r['drink']['name']
+        bakery_names = ", ".join([b['name'] for b in r['bakery']])
+        table.append({
+            "순위": i,
+            "점수": r['score'],
+            "음료": drink_name,
+            "베이커리": bakery_names,
+            "1인가격(원)": r['total_price_per_set'],
+            f"{n_people}명합계(원)": r['total_price_for_n_people'],
+        })
+    df = pd.DataFrame(table)
 
-        if not drink_recs:
-            st.info("음료는 조건에 맞는 게 부족해서 생략할게.")
-            drink_recs = [[{'name':'(음료 없음)', 'price':0, 'tags':[], 'popularity':5, 'sweetness':0}]]
+    st.dataframe(df, use_container_width=True, height=min(320, 60 + 35 * len(df)))
 
-        if not bakery_recs:
-            st.info("베이커리는 조건에 맞는 게 부족해서 가능한 만큼만 묶어서 보여줄게.")
-            # recommend_menu 내부 폴백이 반환한 한 묶음이 이미 있음
+    pick = st.selectbox("상세 볼 세트 선택(순위)", options=[row["순위"] for row in table], index=0)
+    chosen = top[pick-1]
 
-        all_pairs = list(itertools.product(drink_recs, bakery_recs))
-        random.shuffle(all_pairs)
+    if compact:
+        st.markdown(f"#### 세트 {pick} — 점수 **{chosen['score']} / 100**")
+        st.markdown(f"- 1인 세트: **{chosen['total_price_per_set']:,}원** / {n_people}명 합계: **{chosen['total_price_for_n_people']:,}원**")
 
-        all_selected_tags = selected_drink_tags + selected_bakery_tags
-        results = []
-        for d_combo, b_combo in all_pairs:
-            drink_price = d_combo[0]['price']
-            bakery_sum  = sum(x['price'] for x in b_combo)
-            total_per_set = drink_price + bakery_sum
-
-            items = d_combo + b_combo
-            if (max_budget == float('inf')) or (total_per_set <= max_budget):
-                score = calculate_weighted_score(items, all_selected_tags)
-                results.append({
-                    "score": score,
-                    "drink": d_combo[0],
-                    "bakery": b_combo,
-                    "total_price_per_set": total_per_set,
-                    "total_price_for_n_people": total_per_set * n_people
-                })
-            if len(results) >= 200:
-                break
-
-        if not results:
-            st.warning("예산 때문에 걸러졌어. 예산을 올리거나 조건을 풀어봐.")
-        else:
-            results.sort(key=lambda x: x['score'], reverse=True)
-            top = results[:3]
-            for i, r in enumerate(top):
-                st.markdown(f"#### 세트 {i+1} — 점수 **{r['score']} / 100**")
-                st.markdown(f"- 1인 세트: **{r['total_price_per_set']:,}원**")
-                st.markdown(f"- {n_people}명 합계: **{r['total_price_for_n_people']:,}원**")
-
-                st.markdown("##### 음료 🥤")
-                d = r['drink']
-                d_tags = ", ".join(f"#{t}" for t in d['tags'] if t != '인기')
-                is_pop = " (인기!)" if d['popularity'] == 10 else ""
-                # 카테고리 표시
-                try:
-                    cat = drink_df.loc[drink_df['name'] == d['name'], 'category'].iloc[0]
-                except Exception:
-                    cat = "N/A"
-                st.info(f"• {d['name']} ({d['price']:,}원) — 당도 {d['sweetness']}, 카테고리 {cat}{is_pop} — 태그 {d_tags}")
-
-                st.markdown("##### 베이커리 🍞")
-                for item in r['bakery']:
-                    b_tags = ", ".join(f"#{t}" for t in item['tags'] if t != '인기')
-                    is_pop_b = " (인기!)" if item['popularity'] == 10 else ""
-                    st.success(f"• {item['name']} ({item['price']:,}원) — 당도 {item['sweetness']}{is_pop_b} — 태그 {b_tags}")
-
-                if i < len(top) - 1:
-                    st.markdown("---")
-
+        c1, c2 = st.columns(2)
+        with c1:
+            d = chosen['drink']
+            st.subheader("🥤 음료")
+            st.info(f"• {d['name']} ({d['price']:,}원) | 당도 {d['sweetness']}")
+        with c2:
+            st.subheader("🍞 베이커리")
+            for b in chosen['bakery']:
+                st.success(f"• {b['name']} ({b['price']:,}원) | 당도 {b['sweetness']}")
+    else:
+        st.markdown(f"#### 세트 {pick} — 점수 **{chosen['score']} / 100**")
+        st.markdown(f"- 1인 세트: **{chosen['total_price_per_set']:,}원** / {n_people}명 합계: **{chosen['total_price_for_n_people']:,}원**")
+        with st.expander("상세 메뉴 보기", expanded=True):
+            st.markdown("##### 음료 🥤")
+            d = chosen['drink']
+            st.info(f"• {d['name']} ({d['price']:,}원) — 당도 {d['sweetness']}")
+            st.markdown("##### 베이커리 🍞")
+            for item in chosen['bakery']:
+                st.success(f"• {item['name']} ({item['price']:,}원) — 당도 {item['sweetness']}")
 with tab_board:
     st.title("📋 메뉴판")
     st.markdown("---")
