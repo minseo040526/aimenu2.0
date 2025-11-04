@@ -7,7 +7,7 @@ from PIL import Image
 # =========================
 # 기본 설정
 # =========================
-st.set_page_config(page_title="🤖AI 베이커리 메뉴 추천 시스템", layout="wide")
+st.set_page_config(page_title="AI 베이커리 메뉴 추천 시스템", layout="wide")
 
 # =========================
 # 공용 유틸
@@ -28,13 +28,8 @@ def normalize_columns(df: pd.DataFrame, is_drink: bool = False) -> pd.DataFrame:
     if df['price'].isnull().any() or df['sweetness'].isnull().any():
         st.error(f"🚨 {menu_type} 파일의 price/sweetness 컬럼에 잘못된 값이 있습니다.")
         st.stop()
-    # 🔒 카테고리 문자열 표준화
     if is_drink and 'category' in df.columns:
-        df['category'] = (
-            df['category'].astype(str)
-            .str.strip()
-            .str.replace('  ', ' ', regex=False)
-        )
+        df['category'] = df['category'].astype(str).str.strip()
     return df
 
 def preprocess_tags(df: pd.DataFrame) -> pd.DataFrame:
@@ -71,49 +66,31 @@ except Exception as e:
     st.error(f"🚨 CSV 파일 로드 오류: {e}")
     st.stop()
 
-# 태그/인기도 전처리
 bakery_df = assign_popularity_score(preprocess_tags(bakery_df))
 drink_df  = assign_popularity_score(preprocess_tags(drink_df))
 
-# 카테고리 옵션(공백 정리 후 유일값)
-all_drink_categories = sorted(drink_df['category'].astype(str).str.strip().unique())
-
-# 태그 후보
-FLAVOR_TAGS = {'달콤한','고소한','짭짤한','단백한','부드러운','깔끔한','쌉싸름한','상큼한','초코','치즈'}
+FLAVOR_TAGS = {'달콤한','고소한','짭짤한','단백한','부드러운','깔끔한','쌉싸름한','상큼한','씁쓸한','초코','치즈'}
 BAKERY_TAGS = uniq_tags(bakery_df)
 DRINK_TAGS  = uniq_tags(drink_df)
 ui_bakery_utility_tags = sorted(BAKERY_TAGS - FLAVOR_TAGS)
 ui_drink_flavor_tags   = sorted(DRINK_TAGS & FLAVOR_TAGS)
+all_drink_categories   = sorted(drink_df['category'].astype(str).unique())
 
 # =========================
 # 추천 로직
 # =========================
 def filter_base(df, min_s, max_s, tags, max_price=None, categories=None, require_all=True):
     f = df.copy()
-
-    # ✅ 음료 카테고리는 무조건 일치(공백 정리 포함)
-    if 'category' in f.columns:
-        if categories and len(categories) > 0:
-            cats = [str(c).strip() for c in categories]
-            f = f[f['category'].astype(str).str.strip().isin(cats)]
-        else:
-            # 카테고리 미선택이면 음료 추천 자체를 막아 혼동 방지
-            return pd.DataFrame(columns=f.columns)
-
-    # 당도 범위
+    if 'category' in f.columns and categories:
+        f = f[f['category'].isin(categories)]
     f = f[(f['sweetness'] >= min_s) & (f['sweetness'] <= max_s)]
-
-    # 태그 필터
     if tags:
         if require_all:
             f = f[f['tags_list'].apply(lambda x: set(tags).issubset(set(x)))]
         else:
             f = f[f['tags_list'].apply(lambda x: not set(x).isdisjoint(set(tags)))]
-
-    # 예산(단품 기준) 필터
     if max_price is not None and 'price' in f.columns:
         f = f[f['price'] <= max_price]
-
     return f
 
 def make_recs(f, n_items, max_price=None):
@@ -141,20 +118,15 @@ def recommend_strict(df, min_s, max_s, tags, n_items, max_price=None, categories
     return make_recs(f, n_items, max_price)
 
 def recommend_relaxed(df, min_s, max_s, tags, n_items, max_price=None, categories=None):
-    # 1) ANY 태그
     f = filter_base(df, min_s, max_s, tags, max_price, categories, require_all=False)
     if not f.empty: return make_recs(f, n_items, max_price)
-    # 2) 태그 무시
     f = filter_base(df, min_s, max_s, [], max_price, categories, require_all=True)
     if not f.empty: return make_recs(f, n_items, max_price)
-    # 3) 당도 ±1
     f = filter_base(df, max(1, min_s-1), min(5, max_s+1), [], max_price, categories, require_all=True)
     if not f.empty: return make_recs(f, n_items, max_price)
-    # 4) 인기순(카테고리+예산만)
     f = df.copy()
     if 'category' in f.columns and categories:
-        cats = [str(c).strip() for c in categories]
-        f = f[f['category'].astype(str).str.strip().isin(cats)]
+        f = f[f['category'].isin(categories)]
     if max_price is not None:
         f = f[f['price'] <= max_price]
     return make_recs(f.sort_values('popularity_score', ascending=False), n_items, max_price)
@@ -175,7 +147,7 @@ def calc_score(items, selected_tags):
 tab_reco, tab_board = st.tabs(["AI 메뉴 추천", "메뉴판"])
 
 with tab_reco:
-    st.title("🤖AI 메뉴 추천 시스템")
+    st.title("AI 메뉴 추천 시스템")
     st.caption("고객님의 취향과 인기 정보를 함께 반영해 AI가 추천해드립니다.")
 
     c1, c2, c3 = st.columns(3)
@@ -203,12 +175,10 @@ with tab_reco:
 
     st.markdown("---")
 
-    if st.button("AI 추천 메뉴 보기👇", type="primary", use_container_width=True):
-        # 1) 엄격 매칭
+    if st.button("AI 추천 메뉴 보기", type="primary", use_container_width=True):
         drink_recs  = recommend_strict(drink_df,  min_drk, max_drk, sel_drk_tags, 1,        max_budget, sel_cats)
         bakery_recs = recommend_strict(bakery_df, min_bak, max_bak, sel_bak_tags, n_bakery, max_budget)
         relaxed_used = False
-        # 2) 부족하면 완화
         if not drink_recs:
             drink_recs = recommend_relaxed(drink_df,  min_drk, max_drk, sel_drk_tags, 1,        max_budget, sel_cats)
             relaxed_used = True
@@ -220,7 +190,6 @@ with tab_reco:
             st.warning("조건에 맞는 메뉴가 없습니다. 태그나 당도를 완화해 주세요.")
             st.stop()
 
-        # 조합 생성 + 점수
         results = []
         for d_combo, b_combo in itertools.product(drink_recs or [[]], bakery_recs or [[]]):
             per_price = (d_combo[0]['price'] if d_combo else 0) + sum(x['price'] for x in b_combo)
@@ -239,35 +208,21 @@ with tab_reco:
             st.warning("예산에 맞는 메뉴가 없습니다. 조건을 완화해 주세요.")
             st.stop()
 
-        # 스타일
-        st.markdown("""
-<style>
-.card{padding:14px 16px;margin-bottom:12px;border-radius:12px;border:1px solid #eee;background:#fff}
-.card h4{margin:0 0 6px 0;font-size:1.05rem}
-.badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #ff5a5f;margin-right:6px;font-size:0.85rem}
-.kv{background:#fafafa;border:1px solid #eee;border-radius:8px;padding:8px 10px;margin-top:6px}
-.small{color:#666;font-size:0.9rem}
-.tag{display:inline-block;background:#fff4f4;color:#c44;border:1px solid #fbb;padding:2px 6px;border-radius:6px;margin:2px;font-size:0.85rem}
-</style>
-        """, unsafe_allow_html=True)
-
         results.sort(key=lambda x: x['score'], reverse=True)
         if relaxed_used:
-            st.info("조건에 정확히 맞는 메뉴가 부족해요😅 AI가 유사한 메뉴를 함께 추천했습니다🥰")
+            st.info("조건에 정확히 맞는 메뉴가 부족하여, AI가 유사한 메뉴를 함께 추천했습니다.")
 
-        for rank, r in enumerate(results[:5], start=1):
+        for rank, r in enumerate(results[:3], start=1):
             base_drink = r['drink']
             bakery_list = r['bakery']
             per_price   = r['per_price']
             total_price = per_price * n_people
 
-            # 인원수만큼 음료 추천(카테고리/태그/당도 강제)
             drink_list = []
             if base_drink:
                 drink_list.append(base_drink)
             if n_people > 1:
                 available = drink_df[drink_df['name'] != (base_drink['name'] if base_drink else "")]
-                # 카테고리 강제(공백 정리)
                 cats = [str(c).strip() for c in sel_cats] if sel_cats else []
                 if cats:
                     available = available[available['category'].astype(str).str.strip().isin(cats)]
