@@ -173,7 +173,7 @@ def calc_score(items, selected_tags):
 tab_reco, tab_board = st.tabs(["AI 메뉴 추천", "메뉴판"])
 
 with tab_reco:
-    st.title("AI 메뉴 추천 시스템")
+    st.title("🤖AI 메뉴 추천 시스템")
     st.caption("고객님의 취향과 인기 정보를 함께 반영해 AI가 추천해드립니다.")
 
     c1, c2, c3 = st.columns(3)
@@ -188,20 +188,20 @@ with tab_reco:
             max_budget = st.slider("최대 예산(1인)", 5000, 50000, 15000, 1000)
 
     with c2:
-        st.subheader("베이커리")
+        st.subheader("🍞베이커리")
         n_bakery = st.slider("베이커리 개수", 1, 5, 2)
         min_bak, max_bak = st.slider("베이커리 당도", 1, 5, (1,5))
         sel_bak_tags = st.multiselect("베이커리 태그", ui_bakery_utility_tags, max_selections=3)
 
     with c3:
-        st.subheader("음료")
+        st.subheader("🥤음료")
         sel_cats = st.multiselect("음료 카테고리", all_drink_categories, default=all_drink_categories)
         min_drk, max_drk = st.slider("음료 당도", 1, 5, (1,5))
         sel_drk_tags = st.multiselect("음료 맛 태그", ui_drink_flavor_tags, max_selections=3)
 
     st.markdown("---")
 
-    if st.button("AI 추천 메뉴 보기", type="primary", use_container_width=True):
+    if st.button("AI 추천 메뉴 보기👇", type="primary", use_container_width=True):
         # 1) 엄격 매칭
         drink_recs  = recommend_strict(drink_df,  min_drk, max_drk, sel_drk_tags, 1,        max_budget, sel_cats)
         bakery_recs = recommend_strict(bakery_df, min_bak, max_bak, sel_bak_tags, n_bakery, max_budget)
@@ -215,7 +215,7 @@ with tab_reco:
             relaxed_used = True
 
         if not drink_recs and not bakery_recs:
-            st.warning("조건에 맞는 메뉴가 없습니다. 태그나 당도를 완화해 주세요.")
+            st.warning("조건에 맞는 메뉴가 없어요😅 태그나 당도를 완화해 주세요.")
             st.stop()
 
         # 조합 생성 + 점수
