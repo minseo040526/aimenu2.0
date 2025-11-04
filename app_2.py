@@ -79,17 +79,25 @@ all_drink_categories = sorted(drink_df['category'].astype(str).unique())
 # =========================
 def filter_base(df, min_s, max_s, tags, max_price=None, categories=None, require_all=True):
     f = df.copy()
+    
+    # ✅ 음료 카테고리는 반드시 일치해야 함
     if 'category' in f.columns and categories:
         f = f[f['category'].isin(categories)]
+    elif 'category' in f.columns:
+        # 카테고리를 선택하지 않았으면 빈 데이터 반환 (잘못된 추천 방지)
+        return pd.DataFrame(columns=f.columns)
+
     f = f[(f['sweetness'] >= min_s) & (f['sweetness'] <= max_s)]
+    
     if tags:
         if require_all:
             f = f[f['tags_list'].apply(lambda x: set(tags).issubset(x))]
         else:
             f = f[f['tags_list'].apply(lambda x: not set(x).isdisjoint(tags))]
-    if max_price is not None:
-        if 'price' in f.columns:
-            f = f[f['price'] <= max_price]
+    
+    if max_price is not None and 'price' in f.columns:
+        f = f[f['price'] <= max_price]
+    
     return f
 
 def make_recs(f, n_items, max_price=None):
