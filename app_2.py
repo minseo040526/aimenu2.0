@@ -57,7 +57,7 @@ def assign_popularity_score(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def uniq_tags(df: pd.DataFrame) -> set:
-    return set(t for sub in df['tags_list'] for t in sub if t and t != '인기')
+    return set(t for sub in df['tags_list'] for t in sub if t)
 
 def load_image(image_path: str):
     try:
