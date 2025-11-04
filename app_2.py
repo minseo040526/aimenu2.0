@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import random
 import itertools
-from PIL import Image
-
 # =========================
 # 기본 설정
 # =========================
@@ -309,8 +307,3 @@ with tab_board:
         st.subheader("음료 메뉴")
         if img2: st.image(img2, caption="Drink 메뉴판", use_column_width=True)
         else: st.dataframe(drink_df)
-'''
-
-path = Path('/mnt/data/app_final_v4.py')
-path.write_text(code, encoding='utf-8')
-path
