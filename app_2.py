@@ -245,6 +245,27 @@ with tab_reco:
 
 if st.button("AI 추천 메뉴 조합 받기", type="primary", use_container_width=True):
     st.markdown("### 🏆 AI 추천 메뉴 조합")
+        # --- 추천 조합 생성 ---
+    # 음료 추천
+    drink_recs = recommend_menu(
+        drink_df, 
+        min_drk, max_drk, 
+        selected_drink_tags, 
+        1, 
+        max_price=max_budget, 
+        selected_categories=selected_categories
+    )
+
+    # 베이커리 추천
+    bakery_recs = recommend_menu(
+        bakery_df, 
+        min_bak, max_bak, 
+        selected_bakery_tags, 
+        n_bakery, 
+        max_price=max_budget
+    )
+
+    results = []  # ✅ 결과 저장용 리스트
     if not results:
         st.warning("예산에 맞는 메뉴가 없습니다. 조건 설정을 다시 해주세요")
 else:
