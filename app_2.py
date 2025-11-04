@@ -7,7 +7,7 @@ from PIL import Image
 # =========================
 # 기본 설정
 # =========================
-st.set_page_config(page_title="AI 베이커리 메뉴 추천 시스템", layout="wide")
+st.set_page_config(page_title="🤖AI 베이커리 메뉴 추천 시스템", layout="wide")
 
 # =========================
 # 공용 유틸
@@ -79,7 +79,7 @@ drink_df  = assign_popularity_score(preprocess_tags(drink_df))
 all_drink_categories = sorted(drink_df['category'].astype(str).str.strip().unique())
 
 # 태그 후보
-FLAVOR_TAGS = {'달콤한','고소한','짭짤한','단백한','부드러운','깔끔한','쌉싸름한','상큼한','씁쓸한','초코','치즈'}
+FLAVOR_TAGS = {'달콤한','고소한','짭짤한','단백한','부드러운','깔끔한','쌉싸름한','상큼한','초코','치즈'}
 BAKERY_TAGS = uniq_tags(bakery_df)
 DRINK_TAGS  = uniq_tags(drink_df)
 ui_bakery_utility_tags = sorted(BAKERY_TAGS - FLAVOR_TAGS)
@@ -175,7 +175,7 @@ def calc_score(items, selected_tags):
 tab_reco, tab_board = st.tabs(["AI 메뉴 추천", "메뉴판"])
 
 with tab_reco:
-    st.title("AI 메뉴 추천 시스템")
+    st.title("🤖AI 메뉴 추천 시스템")
     st.caption("고객님의 취향과 인기 정보를 함께 반영해 AI가 추천해드립니다.")
 
     c1, c2, c3 = st.columns(3)
@@ -203,7 +203,7 @@ with tab_reco:
 
     st.markdown("---")
 
-    if st.button("AI 추천 메뉴 보기", type="primary", use_container_width=True):
+    if st.button("AI 추천 메뉴 보기👇", type="primary", use_container_width=True):
         # 1) 엄격 매칭
         drink_recs  = recommend_strict(drink_df,  min_drk, max_drk, sel_drk_tags, 1,        max_budget, sel_cats)
         bakery_recs = recommend_strict(bakery_df, min_bak, max_bak, sel_bak_tags, n_bakery, max_budget)
@@ -253,7 +253,7 @@ with tab_reco:
 
         results.sort(key=lambda x: x['score'], reverse=True)
         if relaxed_used:
-            st.info("조건에 정확히 맞는 메뉴가 부족하여, AI가 유사한 메뉴를 함께 추천했습니다.")
+            st.info("조건에 정확히 맞는 메뉴가 부족해요😅 AI가 유사한 메뉴를 함께 추천했습니다🥰")
 
         for rank, r in enumerate(results[:5], start=1):
             base_drink = r['drink']
