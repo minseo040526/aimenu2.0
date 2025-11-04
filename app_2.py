@@ -62,7 +62,7 @@ except Exception as e:
 bakery_df = assign_popularity_score(preprocess_tags(bakery_df))
 drink_df  = assign_popularity_score(preprocess_tags(drink_df))
 
-FLAVOR_TAGS = {'달콤한','고소한','짭짤한','단백한','부드러운','깔끔한','쌉싸름한','상큼한','씁쓸한','초코','치즈'}
+FLAVOR_TAGS = {'달콤한','고소한','짭짤한','단백한','부드러운','깔끔한','쌉싸름한','상큼한','초코','치즈'}
 BAKERY_TAGS = uniq_tags(bakery_df)
 DRINK_TAGS  = uniq_tags(drink_df)
 ui_bakery_utility_tags = sorted(BAKERY_TAGS - FLAVOR_TAGS)
@@ -146,12 +146,12 @@ tab_reco, tab_board = st.tabs(["AI 메뉴 추천", "메뉴판"])
 
 with tab_reco:
     st.title("AI 메뉴 추천 시스템")
-    st.caption("고객님의 취향과 인기 메뉴 정보를 반영해 AI가 추천합니다.")
+    st.caption("고객님의 취향과 인기 메뉴 정보를 반영해 AI가 메뉴를 추천합니다.")
 
     c1,c2,c3 = st.columns(3)
     with c1:
         st.subheader("인원/예산")
-        n_people = st.number_input("인원수", 1, 10, 2)
+        n_people = st.number_input("인원수(인원수만큼 음료를 추천해드려요)", 1, 10, 2)
         unlimited = st.checkbox("예산 무제한", value=True)
         if unlimited:
             max_budget = None
