@@ -186,7 +186,7 @@ with tab1:
 
         if not results:
             if max_budget is None:
-                st.warning( 태그/당도 조건을 완화해주세요.")
+                st.warning("태그/당도 조건을 완화해주세요.")
             else:
                 st.warning("예산이 적습니다. 조건을 다시 설정해주세요")
             st.stop()
